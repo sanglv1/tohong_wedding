@@ -37,8 +37,8 @@ export async function deleteGuest(key: string, password: string) {
   await readJson(res)
 }
 
-export function recordGuestOpen(name: string) {
-  return fetch('/api/guest-open', {
+export function recordGuestOpen(name: string, endpoint = '/api/guest-open') {
+  return fetch(endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name }),

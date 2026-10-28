@@ -45,7 +45,19 @@ function useActiveSection() {
   return active
 }
 
-export function WeddingHeader({ showGuestbook }: { showGuestbook: boolean }) {
+export function WeddingHeader({
+  showGuestbook = false,
+  groomBrand = WEDDING.groomBrand,
+  brideBrand = WEDDING.brideBrand,
+  groomShort = WEDDING.groomShort,
+  brideShort = WEDDING.brideShort,
+}: {
+  showGuestbook?: boolean
+  groomBrand?: string
+  brideBrand?: string
+  groomShort?: string
+  brideShort?: string
+}) {
   const links = showGuestbook ? NAV_LINKS : NAV_LINKS.filter((l) => l.href !== '#loi-chuc')
   const [open, setOpen] = useState(false)
   const activeHref = useActiveSection()
@@ -74,17 +86,17 @@ export function WeddingHeader({ showGuestbook }: { showGuestbook: boolean }) {
   return (
     <header
       ref={headerRef}
-      className="theme-header fixed top-0 left-0 right-0 z-50 backdrop-blur-xl border-b shadow-sm pt-[env(safe-area-inset-top)]"
+      className="theme-header fixed top-[var(--demo-bar)] left-0 right-0 z-50 backdrop-blur-xl border-b shadow-sm pt-[env(safe-area-inset-top)]"
     >
       <div className="max-w-4xl mx-auto px-4 sm:px-6 h-14 sm:h-16 flex items-center justify-between">
         <a
           href="#"
           className="font-serif text-xl sm:text-2xl font-semibold tracking-wide truncate max-w-[60vw] sm:max-w-none flex items-center flex-nowrap gap-x-1.5"
-          aria-label={`${WEDDING.groomShort} và ${WEDDING.brideShort} - về đầu trang`}
+          aria-label={`${groomShort} và ${brideShort} - về đầu trang`}
         >
-          <span className="whitespace-nowrap">{WEDDING.groomBrand}</span>
+          <span className="whitespace-nowrap">{groomBrand}</span>
           <Heart className="w-4 h-4 text-w-gold fill-current" aria-hidden />
-          <span className="whitespace-nowrap">{WEDDING.brideBrand}</span>
+          <span className="whitespace-nowrap">{brideBrand}</span>
         </a>
 
         <nav className="hidden md:flex items-center gap-6" aria-label="Điều hướng chính">

@@ -43,7 +43,7 @@ function WishCard({ entry, isNew }: { entry: GuestbookEntry; isNew: boolean }) {
 }
 
 /** enabled: server đã có biến kết nối Upstash Redis */
-export function GuestbookSection({ enabled: isGuestbookEnabled }: { enabled: boolean }) {
+export function GuestbookSection({ enabled: isGuestbookEnabled, endpoint = '/api/guestbook', demo = false }: { enabled: boolean; endpoint?: string; demo?: boolean }) {
   const [entries, setEntries] = useState<GuestbookEntry[]>([])
   const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>('loading')
   const guestName = useGuestName()
@@ -58,17 +58,20 @@ export function GuestbookSection({ enabled: isGuestbookEnabled }: { enabled: boo
   const reload = useCallback(async () => {
     setLoadState('loading')
     try {
-      setEntries(await fetchGuestbook())
+      setEntries(await fetchGuestbook(endpoint))
       setLoadState('ready')
     } catch {
       setLoadState('error')
     }
-  }, [])
+  }, [endpoint])
 
   useEffect(() => {
-    if (!isGuestbookEnabled) return
+    if (!isGuestbookEnabled || demo) {
+      if (demo) setLoadState('ready')
+      return
+    }
     let cancelled = false
-    fetchGuestbook()
+    fetchGuestbook(endpoint)
       .then((data) => {
         if (cancelled) return
         setEntries(data)
@@ -80,7 +83,7 @@ export function GuestbookSection({ enabled: isGuestbookEnabled }: { enabled: boo
     return () => {
       cancelled = true
     }
-  }, [isGuestbookEnabled])
+  }, [isGuestbookEnabled, endpoint, demo])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -91,7 +94,8 @@ export function GuestbookSection({ enabled: isGuestbookEnabled }: { enabled: boo
     setSubmitState('sending')
     setErrorText('')
     try {
-      const saved = await postGuestbook({ name: trimmedName, message: trimmedMessage, website })
+      if (demo) throw new Error('Đây là mẫu xem thử. Lời chúc chỉ lưu trên thiệp đã xuất bản.')
+      const saved = await postGuestbook({ name: trimmedName, message: trimmedMessage, website }, endpoint)
       const entry = saved ?? { name: trimmedName, message: trimmedMessage, createdAt: new Date().toISOString() }
       setEntries((prev) => [entry, ...prev])
       setNewKey(entry.createdAt)

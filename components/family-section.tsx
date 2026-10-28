@@ -1,4 +1,5 @@
-import { FAMILY_INFO } from '@/lib/family'
+import { CLASSIC_MODEL } from '@/lib/constants'
+import type { WeddingModel } from '@/lib/wedding-model'
 import { Reveal, type RevealVariant } from './reveal'
 import { SectionHeading } from './section-heading'
 
@@ -29,7 +30,10 @@ function FamilyCard({
   )
 }
 
-export function FamilySection() {
+export function FamilySection({ model = CLASSIC_MODEL }: { model?: WeddingModel }) {
+  const FAMILY_INFO = model.family
+  const empty = !FAMILY_INFO.nhaTrai.ong && !FAMILY_INFO.nhaTrai.ba && !FAMILY_INFO.nhaGai.ong && !FAMILY_INFO.nhaGai.ba
+  if (empty) return null
   return (
     <section id="gia-dinh" className="py-16 sm:py-20 md:py-28 scroll-mt-16">
       <div className="max-w-4xl mx-auto px-4 sm:px-6">

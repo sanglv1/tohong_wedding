@@ -16,8 +16,8 @@ export function guestKey(name: string) {
 /** Link "Mở thử" của người quản lý có thêm tham số này để không tính là khách đã mở */
 export const PREVIEW_PARAM = 'xem-thu'
 
-export function guestLink(origin: string, name: string, preview = false) {
+export function guestLink(origin: string, name: string, preview = false, path = '/thiep/tien-dat-huyen-trang') {
   const params = new URLSearchParams({ to: name })
   if (preview) params.set(PREVIEW_PARAM, '1')
-  return `${origin}/?${params}`
+  return `${origin}${path}?${params}`
 }

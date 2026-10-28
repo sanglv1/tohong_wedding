@@ -5,21 +5,25 @@ import { BACKGROUND_MUSIC } from '@/lib/music'
 
 export const WEDDING_OPEN_EVENT = 'wedding-open'
 
+type Music = { playlist: string[]; volume: number }
+
 /**
  * Chỉ tạo và tải file nhạc khi khách mở thiệp hoặc bấm nút nhạc,
  * để lần tải trang đầu tiên không phải tải vài MB âm thanh.
  */
-export function useBackgroundMusic() {
+export function useBackgroundMusic(music: Music = BACKGROUND_MUSIC) {
   const [isPlaying, setIsPlaying] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const trackRef = useRef(0)
   const failedRef = useRef(new Set<number>())
   const pausedByVisibilityRef = useRef(false)
   const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const musicRef = useRef(music)
+  musicRef.current = music
 
   const getAudio = useCallback(() => {
     if (audioRef.current) return audioRef.current
-    const { playlist, volume } = BACKGROUND_MUSIC
+    const { playlist, volume } = musicRef.current
     if (playlist.length === 0) return null
 
     const audio = new Audio(playlist[0])
@@ -69,7 +73,7 @@ export function useBackgroundMusic() {
     (delayMs: number) => {
       const audio = getAudio()
       if (!audio) return
-      const target = BACKGROUND_MUSIC.volume
+      const target = musicRef.current.volume
       audio.muted = true
       audio.play().catch(() => {})
       clearTimeout(fadeTimerRef.current)

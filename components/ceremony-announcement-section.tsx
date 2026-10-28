@@ -1,10 +1,13 @@
 import { MapPin, CalendarPlus } from 'lucide-react'
-import { WEDDING, ANNOUNCEMENT, FAMILY_ADDRESSES, VENUE_COORDINATES } from '@/lib/constants'
+import { CLASSIC_MODEL } from '@/lib/constants'
+import type { WeddingModel } from '@/lib/wedding-model'
 import { Reveal } from './reveal'
 
-const MAP_EMBED_URL = `https://maps.google.com/maps?q=${VENUE_COORDINATES.lat},${VENUE_COORDINATES.lng}&z=15&hl=vi&output=embed`
-
-export function CeremonyAnnouncementSection() {
+export function CeremonyAnnouncementSection({ model = CLASSIC_MODEL }: { model?: WeddingModel }) {
+  const WEDDING = model.wedding
+  const ANNOUNCEMENT = model.announcement
+  const FAMILY_ADDRESSES = model.familyAddresses
+  const mapEmbed = model.mapEmbed
   return (
     <section id="thong-bao-le" className="py-16 sm:py-20 md:py-28 overflow-x-hidden scroll-mt-16">
       <div className="max-w-4xl mx-auto px-4 sm:px-6">
@@ -20,7 +23,9 @@ export function CeremonyAnnouncementSection() {
           </h2>
 
           <p className="ceremony-sub text-sm sm:text-base italic mb-6 opacity-95">
-            Lễ Thành Hôn được cử hành tại tư gia
+            {WEDDING.ceremony.venue
+              ? `${WEDDING.ceremony.name} · ${WEDDING.ceremony.venue}`
+              : WEDDING.ceremony.name}
           </p>
 
           <div className="ceremony-line flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-8 py-4 sm:py-5 mb-2 border-y">
@@ -42,46 +47,54 @@ export function CeremonyAnnouncementSection() {
             <div className="ceremony-divider sm:hidden w-full max-w-[4rem] h-px" aria-hidden />
             <div className="ceremony-sub text-xs sm:text-base">
               {WEDDING.ceremony.year}
-              <span className="ceremony-accent"> / ({WEDDING.ceremony.lunarYear})</span>
+              {WEDDING.ceremony.lunarYear && <span className="ceremony-accent"> / ({WEDDING.ceremony.lunarYear})</span>}
             </div>
           </div>
 
-          <p className="ceremony-lunar text-sm italic mb-6">({WEDDING.ceremony.lunarDate})</p>
+          {WEDDING.ceremony.lunarDate && <p className="ceremony-lunar text-sm italic mb-6">({WEDDING.ceremony.lunarDate})</p>}
 
-          <p className="ceremony-names text-sm sm:text-base font-semibold mb-6 leading-relaxed px-1 break-words">
-            Tại: {WEDDING.ceremony.location}
-          </p>
+          {WEDDING.ceremony.location && (
+            <p className="ceremony-names text-sm sm:text-base font-semibold mb-6 leading-relaxed px-1 break-words">
+              Tại: {WEDDING.ceremony.location}
+            </p>
+          )}
 
-          <div className="relative w-full aspect-[4/3] sm:aspect-[16/9] rounded-xl overflow-hidden border border-w-gold/50 mb-6 bg-black/10">
-            <iframe
-              src={MAP_EMBED_URL}
-              title={`Bản đồ đường đến ${WEDDING.ceremony.location}`}
-              className="absolute inset-0 w-full h-full border-0"
-              loading="lazy"
-              referrerPolicy="no-referrer-when-downgrade"
-              allowFullScreen
-            />
-          </div>
+          {mapEmbed && (
+            <div className="relative w-full aspect-[4/3] sm:aspect-[16/9] rounded-xl overflow-hidden border border-w-gold/50 mb-6 bg-black/10">
+              <iframe
+                src={mapEmbed}
+                title={`Bản đồ đường đến ${WEDDING.ceremony.location}`}
+                className="absolute inset-0 w-full h-full border-0"
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+                allowFullScreen
+              />
+            </div>
+          )}
 
           <div className="flex flex-wrap justify-center gap-2 sm:gap-4">
-            <a
-              href={FAMILY_ADDRESSES.groomFamily.mapsUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="ceremony-btn inline-flex items-center gap-2 px-5 py-3 rounded-xl font-semibold text-sm transition"
-            >
-              <MapPin className="w-4 h-4" aria-hidden />
-              Chỉ đường
-            </a>
-            <a
-              href={WEDDING.addToCalendarUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="ceremony-btn inline-flex items-center gap-2 px-5 py-3 rounded-xl font-semibold text-sm transition"
-            >
-              <CalendarPlus className="w-4 h-4" aria-hidden />
-              Thêm lịch
-            </a>
+            {FAMILY_ADDRESSES.groomFamily.mapsUrl && (
+              <a
+                href={FAMILY_ADDRESSES.groomFamily.mapsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ceremony-btn inline-flex items-center gap-2 px-5 py-3 rounded-xl font-semibold text-sm transition"
+              >
+                <MapPin className="w-4 h-4" aria-hidden />
+                Chỉ đường
+              </a>
+            )}
+            {WEDDING.addToCalendarUrl && (
+              <a
+                href={WEDDING.addToCalendarUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ceremony-btn inline-flex items-center gap-2 px-5 py-3 rounded-xl font-semibold text-sm transition"
+              >
+                <CalendarPlus className="w-4 h-4" aria-hidden />
+                Thêm lịch
+              </a>
+            )}
           </div>
         </Reveal>
       </div>

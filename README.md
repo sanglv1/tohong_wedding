@@ -1,85 +1,101 @@
-# Thiệp cưới online - Tiến Đạt & Huyền Trang
+# Tơ Hồng
 
-Next.js 16, React 19, Tailwind CSS 4. Trang tĩnh, deploy miễn phí trên Vercel.
+Nền tảng thiệp cưới online. Khách chọn mẫu, viết lễ, xuất bản một link để người được mời xác nhận tham dự, gửi lời chúc và xem thông tin mừng cưới.
+
+Next.js 16, React 19, Tailwind CSS 4. Node.js 22.
+
+Trong repo còn thiệp gốc của Tiến Đạt & Huyền Trang. Thiệp đó dùng slug `tien-dat-huyen-trang` và không dùng tài khoản của nền tảng.
 
 ## Chạy trên máy
 
-Cần Node.js 20.9 trở lên.
-
 ```powershell
 npm install
-copy .env.example .env.local   # rồi điền các giá trị trong file
-npm run dev                    # mở http://localhost:3000
+copy .env.example .env.local
+npm run dev
 ```
+
+Mở http://localhost:3000.
 
 Kiểm tra trước khi deploy:
 
 ```powershell
 npm run typecheck
 npm run lint
+npm test
 npm run build
 ```
 
-## Sửa nội dung
+Chưa gắn Redis thì tài khoản, thiệp và đơn nằm trong `data/` (đã gitignore). Chưa gắn object storage thì ảnh và nhạc tải trong xưởng nằm trong `data/media`.
 
-Cách dễ nhất: chạy `npm run dev` rồi mở **http://localhost:3000/admin** để sửa tên cô dâu chú rể, ngày giờ, địa điểm, tên bố mẹ, câu chuyện, ảnh bìa, album, tài khoản mừng cưới, nhạc nền. Bấm **Lưu** (hoặc Ctrl + S) là thiệp trên máy cập nhật ngay; muốn khách thấy thì commit và deploy lại.
+## Nền tảng
 
-Trang `/admin` chỉ hoạt động khi chạy `npm run dev` và chỉ nhận yêu cầu từ chính máy đó (`localhost`); bản deploy trên Vercel trả về 404.
-
-Toàn bộ nội dung nằm trong `content/wedding.json` (có thể sửa tay). Ảnh và nhạc tải lên qua trang quản trị được lưu vào `public/gallery`, `public/qrcode`, `public/music` với tên mới (không ghi đè file cũ). Các file khác:
-
-| File | Nội dung |
+| Đường dẫn | Việc |
 |---|---|
-| `lib/content.ts` | Kiểu dữ liệu và kiểm tra hợp lệ của `content/wedding.json` |
-| `lib/constants.ts` | Tự suy ra thứ, ngày, buổi, link "Thêm vào lịch"... từ dữ liệu gốc |
-| `lib/themes.ts` + `app/globals.css` | Các bộ màu |
+| `/` | Trang chủ Tơ Hồng |
+| `/dang-ky`, `/dang-nhap`, `/quen-mat-khau` | Tài khoản email hoặc Facebook |
+| `/studio` | Danh sách thiệp của tài khoản |
+| `/gia`, `/don/[id]` | Gói và thanh toán |
+| `/thiep/[slug]` | Thiệp khách xem |
+| `/quan-tri-nen-tang` | Quản trị: tài khoản, đơn, sao lưu |
 
-Ảnh xem trước khi chia sẻ link (`app/opengraph-image.tsx`) được tạo tự động từ ảnh bìa cùng tên và ngày cưới.
+Mỗi tài khoản có nhiều thiệp. Lưu nháp không đổi bản khách đang xem. Khách chỉ thấy nội dung mới sau khi xuất bản hoặc cập nhật.
 
-Ảnh bìa tự căn theo khung: ảnh dọc/vuông được lấp đầy và cắt quanh điểm `focus` (đặt vào khuôn mặt, ví dụ `'68% 50%'`), ảnh ngang được hiện trọn trên nền mờ của chính ảnh.
+Gói **Một thiệp** là 150.000 đồng, xuất bản một thiệp, link mở tới 45 ngày sau lễ. Gói **Studio** là 990.000 đồng, 30 ngày, tối đa 30 thiệp. Lần xuất bản đầu cần đơn đã trả. Thiệp đã xuất bản được cập nhật tiếp. Quản trị không bị chặn bởi bước này.
 
-## Link mời riêng cho từng khách
+## Biến môi trường
 
-Thêm `?to=` vào cuối link, ví dụ:
+Mẫu đầy đủ nằm trong `.env.example`. Khi deploy, khai báo trong Vercel → Settings → Environment Variables rồi redeploy.
 
-```
-https://your-domain.vercel.app/?to=Anh%20Minh%20%26%20Ch%E1%BB%8B%20Lan
-```
+Bắt buộc trên bản deploy:
 
-Thiệp sẽ hiện "Trân trọng kính mời Anh Minh & Chị Lan", đồng thời tên được điền sẵn vào form xác nhận và sổ lưu bút. Có thể gõ tiếng Việt có dấu trực tiếp vào thanh địa chỉ, trình duyệt tự mã hóa.
+- `KV_REST_API_URL`, `KV_REST_API_TOKEN`: Upstash Redis. Không có thì nền tảng từ chối lưu, không ghi ra ổ tạm.
+- `PLATFORM_SECRET`: ít nhất 16 ký tự, ký cookie phiên.
+- `OBJECT_STORAGE_ENDPOINT`, `OBJECT_STORAGE_BUCKET`, `OBJECT_STORAGE_ACCESS_KEY_ID`, `OBJECT_STORAGE_SECRET_ACCESS_KEY`: bucket tương thích S3 cho ảnh và nhạc.
+- `NEXT_PUBLIC_SITE_URL`: địa chỉ công khai, dùng cho ảnh chia sẻ link.
 
-Cách tiện hơn: vào trang quản lý → tab **Khách mời**, dán danh sách tên để tạo link và lời mời cho từng người, đồng thời theo dõi ai đã mở thiệp.
+Nên có khi nhận tiền:
 
-## Trang quản lý `/quan-ly`
+- `VNPAY_TMN_CODE`, `VNPAY_SECRET_KEY`, `VNPAY_PAY_URL`. Để trống `VNPAY_PAY_URL` thì code dùng sandbox `https://sandbox.vnpayment.vn/paymentv2/vpcpay.html`. Production phải trỏ cổng thật.
+- `VNPAY_RETURN_URL` để trống thì đường về là địa chỉ trình duyệt cộng `/api/vnpay/return`. IPN khai trên cổng VNPAY: `https://your-domain.vercel.app/api/vnpay/ipn`.
+- `PAYMENT_BANK_NAME`, `PAYMENT_ACCOUNT_NUMBER`, `PAYMENT_ACCOUNT_NAME` cho chuyển khoản. Quản trị xác nhận đơn chuyển khoản trong trang quản trị.
 
-Đăng nhập bằng `GUESTBOOK_ADMIN_PASSWORD`, gồm 3 tab:
+Tùy chọn: `PLATFORM_ADMIN_USERNAME` và `PLATFORM_ADMIN_PASSWORD` tạo một lần ở lần đăng nhập đầu. `FACEBOOK_APP_ID` và `FACEBOOK_APP_SECRET` bật nút Facebook. `RESEND_API_KEY` với `NOTIFY_FROM` gửi email khi khách xác nhận. `CONTACT_ZALO`, `CONTACT_PHONE`, `CONTACT_EMAIL`, `CONTACT_FACEBOOK` hiện trên `/lien-he`.
 
-- **Xác nhận tham dự**: danh sách khách gửi form, tổng số người theo nhà trai / nhà gái, tải file Excel. Khách gửi lại cùng số điện thoại thì cập nhật chứ không bị trùng.
-- **Khách mời**: thêm tên, chép lời mời kèm link riêng, xem ai đã mở thiệp, ai đã xác nhận. Nút **Mở thử** không tính là khách đã mở.
-- **Lời chúc**: xoá lời chúc trong sổ lưu bút.
+`NEXT_PUBLIC_FORMSPREE_ID` chỉ là lối dự phòng của thiệp gốc khi máy chưa có Redis. Thiệp trên nền tảng không dùng Formspree.
 
-## Lưu trữ (Upstash Redis)
+## Lưu trữ
 
-Sổ lưu bút, xác nhận tham dự và danh sách khách mời lưu trên Upstash Redis (miễn phí), cài ngay trong Vercel:
+Redis giữ tài khoản, thiệp, đơn, sổ lưu bút, xác nhận tham dự và khách mời. Khóa nền tảng nằm sau `REDIS_KEY_PREFIX` và tiền tố `platform:`, tách khỏi dữ liệu thiệp gốc.
 
-1. Vercel → project → **Storage** → **Create Database** → chọn **Upstash** (Redis) → tạo và **Connect** vào project. Vercel tự thêm `KV_REST_API_URL`, `KV_REST_API_TOKEN`.
-2. Settings → Environment Variables → thêm `GUESTBOOK_ADMIN_PASSWORD` (mật khẩu tự đặt).
-3. Redeploy.
+Ảnh và nhạc tải trong xưởng không ghi byte vào Redis. Redis chỉ giữ mã file, chủ sở hữu và cờ đã công khai. Byte nằm trên object storage, đường dẫn `media/<mã>`. Ứng dụng vẫn phát file qua `/api/media/[id]` sau khi kiểm tra quyền xem.
 
-Chạy trên máy: copy 3 biến trên vào `.env.local` rồi khởi động lại `npm run dev`. Khi đó máy và web dùng chung một kho dữ liệu.
+Bucket dùng API S3 path-style. Cloudflare R2, AWS S3 và MinIO đều được. `OBJECT_STORAGE_ENDPOINT` là gốc tài khoản, không kèm tên bucket, ví dụ `https://<account>.r2.cloudflarestorage.com`. Region của R2 để `auto`.
 
-Chưa kết nối Upstash thì form xác nhận gửi qua Formspree nếu có `NEXT_PUBLIC_FORMSPREE_ID`.
+Ảnh đã lưu trong Redis từ trước vẫn đọc được. Lần mở đầu, nếu bucket đã cấu hình, byte được copy sang bucket rồi xóa khỏi Redis.
 
-## Thêm bộ màu mới
+## Đăng nhập
 
-1. Thêm một khối `[data-theme='ten-moi'] { ... }` trong `app/globals.css` với 9 biến gốc (xem các theme sáng có sẵn).
-2. Thêm `'ten-moi': { name: 'Tên hiển thị' }` vào `THEMES` trong `lib/themes.ts`.
+Phiên ký HMAC, httpOnly, 14 ngày. Lần đăng nhập sai chỉ đếm trên Redis: 8 lần trong 15 phút cho một địa chỉ IP. Redis lỗi thì từ chối đăng nhập, không đếm trong bộ nhớ của từng tiến trình. Máy dev chưa gắn Redis không áp giới hạn này.
 
-Component dùng các lớp `text-w-strong`, `bg-w-card`, `border-w-line`… nên tự đổi màu theo theme, không cần `!important`.
+## Thiệp gốc
 
-## Deploy lên Vercel
+Nội dung nằm trong `content/wedding.json`. Trang `/admin` chỉ chạy với `npm run dev` trên localhost, dùng để sửa tên, ngày, địa điểm, album và nhạc của thiệp gốc. Ảnh tải ở đó vẫn vào `public/gallery`, `public/qrcode`, `public/music`.
+
+`/quan-ly` dùng `GUESTBOOK_ADMIN_PASSWORD`. Ba tab: xác nhận tham dự, khách mời, lời chúc. Link riêng của khách là `/thiep/tien-dat-huyen-trang?to=Tên`. Đường `/?to=` cũng chuyển về slug này.
+
+Nhạc mẫu gắn với từng mẫu thiệp nằm trong `public/music`. Đó không phải file khách tải lên.
+
+## Mẫu và màu
+
+Danh sách mẫu ở `lib/platform/templates.ts`. Màu ở `lib/themes.ts` và các khối `[data-theme]` trong `app/globals.css`. Component dùng lớp `text-w-strong`, `bg-w-card`, `border-w-line` nên đổi theo theme.
+
+## Deploy
 
 1. Đẩy code lên GitHub.
-2. Trên [vercel.com](https://vercel.com): Add New → Project → chọn repo → Deploy.
-3. Vào Settings → Environment Variables, khai báo các biến trong `.env.example`, rồi Redeploy.
-"# wedding_toanminh" 
+2. Trên Vercel: Add New → Project → chọn repo → Deploy.
+3. Gắn Upstash Redis (Storage → Upstash → Connect).
+4. Tạo bucket R2 hoặc S3, khai báo bốn biến `OBJECT_STORAGE_*`.
+5. Khai báo `PLATFORM_SECRET`, `NEXT_PUBLIC_SITE_URL`, cổng VNPAY production và các biến còn lại trong `.env.example`.
+6. Redeploy.
+
+`/api/health` báo `storage` là `redis` hoặc `thieu-redis`, và `media` là `object`, `file` hoặc `chua-gan`.

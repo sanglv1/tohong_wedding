@@ -39,8 +39,8 @@ export function headcount(entry: Pick<RsvpEntry, 'attending' | 'guests'>) {
   return entry.guests === '6+' ? 6 : Number(entry.guests) || 1
 }
 
-export async function postRsvp(input: RsvpInput) {
-  const res = await fetch('/api/rsvp', {
+export async function postRsvp(input: RsvpInput, endpoint = '/api/rsvp') {
+  const res = await fetch(endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),

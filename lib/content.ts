@@ -1,4 +1,5 @@
 import raw from '@/content/wedding.json'
+import type { OpeningId } from '@/lib/platform/experience'
 
 /**
  * Nội dung thiệp cưới - lưu trong content/wedding.json, sửa qua trang /admin (chỉ khi chạy npm run dev)
@@ -47,6 +48,8 @@ export interface WeddingContent {
   gallery: { src: string; alt: string; caption: string; focus?: string }[]
   gift: Record<'groom' | 'bride', GiftAccount>
   music: { playlist: string[]; volume: number }
+  /** Cách bìa thiệp mở. Thiếu thì dùng hiệu ứng mặc định của mẫu. */
+  opening?: OpeningId
 }
 
 export interface GiftAccount {

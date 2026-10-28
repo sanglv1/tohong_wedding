@@ -4,7 +4,9 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from '
 import Image from 'next/image'
 import { ChevronLeft, ChevronRight, Images, Maximize2, Pause, Play } from 'lucide-react'
 import type { GalleryImage } from '@/lib/gallery'
+import type { AlbumId } from '@/lib/platform/experience'
 import { WEDDING } from '@/lib/constants'
+import { isOptimizableImage } from '@/lib/media-src'
 import { GalleryLightbox } from './gallery-lightbox'
 import { SlideProgress } from './gallery-progress'
 import { Reveal } from './reveal'
@@ -36,7 +38,15 @@ function orientation(ratio?: number) {
   return 'square'
 }
 
-export function GallerySection({ images }: { images: GalleryImage[] }) {
+export function GallerySection({
+  images,
+  brand = { groom: WEDDING.groomBrand, bride: WEDDING.brideBrand, date: WEDDING.dateShort },
+  mode = 'tu-dong',
+}: {
+  images: GalleryImage[]
+  brand?: { groom: string; bride: string; date: string }
+  mode?: AlbumId
+}) {
   const total = images.length
   // Đếm số bước đã xoay (không giới hạn) để vòng 3D luôn quay tiếp theo chiều ngắn nhất, không quay ngược cả vòng
   const [turn, setTurn] = useState(0)
@@ -110,9 +120,12 @@ export function GallerySection({ images }: { images: GalleryImage[] }) {
 
   if (total === 0) return null
   const current = images[active]
-  // Album chủ yếu ảnh dọc (chụp bằng điện thoại) thì xếp thành vòng xoay 3D
-  const portraitAlbum = images.filter((image) => orientation(image.ratio) === 'portrait').length > total / 2
-  const ring = portraitAlbum && total >= RING_MIN_IMAGES
+  const mostlyPortrait = images.filter((image) => orientation(image.ratio) === 'portrait').length > total / 2
+  const portraitAlbum = mode === 'truot' ? false : mode === 'vong' ? true : mostlyPortrait
+  const ring = (mode === 'vong' || (mode === 'tu-dong' && mostlyPortrait)) && total >= RING_MIN_IMAGES
+  const mosaic = mode === 'luoi'
+  const stack = mode === 'xep'
+  const film = mode === 'phim'
 
   const stageProps = {
     ref: stageRef,
@@ -212,7 +225,7 @@ export function GallerySection({ images }: { images: GalleryImage[] }) {
                 priority={i === 0}
                 className="object-cover"
                 style={image.focus ? { objectPosition: image.focus } : undefined}
-                sizes="(max-width: 640px) 60vw, 280px"
+                unoptimized={!isOptimizableImage(image.src)}
               />
             </button>
           ))}
@@ -225,7 +238,7 @@ export function GallerySection({ images }: { images: GalleryImage[] }) {
           {playButton}
           <div key={active} className="gallery-caption min-w-0 flex-1 text-center">
             <p className="text-[0.65rem] sm:text-xs uppercase tracking-[0.3em] text-w-muted whitespace-nowrap">
-              {WEDDING.groomBrand} &amp; {WEDDING.brideBrand} · {WEDDING.dateShort}
+              {brand.groom} &amp; {brand.bride} · {brand.date}
             </p>
             <p className="font-serif text-2xl sm:text-3xl leading-tight text-w-strong line-clamp-1">
               {current.caption ?? 'Khoảnh khắc yêu thương'}
@@ -259,7 +272,7 @@ export function GallerySection({ images }: { images: GalleryImage[] }) {
           data-orient={orientation(image.ratio)}
           aria-hidden={i !== active}
         >
-          <Image src={image.src} alt="" fill className="gallery-backdrop" sizes="(max-width: 1024px) 100vw, 960px" />
+          <Image src={image.src} alt="" fill className="gallery-backdrop" sizes="(max-width: 1024px) 100vw, 960px" unoptimized={!isOptimizableImage(image.src)} />
           <div className={`gallery-kenburns ${i % 2 ? 'kb-right' : 'kb-left'}`}>
             <Image
               src={image.src}
@@ -269,6 +282,7 @@ export function GallerySection({ images }: { images: GalleryImage[] }) {
               className="gallery-photo"
               style={image.focus ? { objectPosition: image.focus } : undefined}
               sizes="(max-width: 1024px) 100vw, 960px"
+              unoptimized={!isOptimizableImage(image.src)}
             />
           </div>
         </div>
@@ -294,8 +308,8 @@ export function GallerySection({ images }: { images: GalleryImage[] }) {
         <div className="flex items-end justify-between gap-4">
           <div key={active} className="gallery-caption min-w-0">
             <p className="text-[0.65rem] sm:text-xs uppercase tracking-[0.3em] text-white/75 mb-1 whitespace-nowrap">
-              {WEDDING.groomBrand} &amp; {WEDDING.brideBrand}
-              <span className="hidden sm:inline"> · {WEDDING.dateShort}</span>
+              {brand.groom} &amp; {brand.bride}
+              <span className="hidden sm:inline"> · {brand.date}</span>
             </p>
             <p
               className={`font-serif leading-tight drop-shadow-lg line-clamp-2 ${
@@ -315,6 +329,113 @@ export function GallerySection({ images }: { images: GalleryImage[] }) {
     </div>
   )
 
+  const frame = (image: GalleryImage, i: number, className: string) => (
+    <Image
+      src={image.src}
+      alt={image.alt}
+      fill
+      className={className}
+      style={image.focus ? { objectPosition: image.focus } : undefined}
+      sizes="(max-width: 768px) 50vw, 360px"
+      unoptimized={!isOptimizableImage(image.src)}
+    />
+  )
+
+  const gridStage = (
+    <div className="grid grid-cols-2 gap-3">
+      {images.map((image, i) => (
+        <button
+          key={image.src + i}
+          type="button"
+          onClick={() => setLightboxIndex(i)}
+          className={`relative overflow-hidden rounded-2xl bg-w-qr focus:outline-none focus-visible:ring-2 focus-visible:ring-w-gold ${
+            i === 0 ? 'col-span-2 aspect-[16/9]' : 'aspect-[4/5]'
+          }`}
+          aria-label={`Phóng to ảnh ${i + 1}: ${image.caption ?? image.alt}`}
+        >
+          {frame(image, i, 'object-cover')}
+          {image.caption && (
+            <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 py-3 text-left font-serif text-lg text-white">
+              {image.caption}
+            </span>
+          )}
+        </button>
+      ))}
+    </div>
+  )
+
+  const stackStage = (
+    <div className="mx-auto max-w-sm">
+      <div className="relative mx-auto h-[26rem] w-[78%]">
+        {images.map((image, i) => {
+          const depth = mod(i - active, total)
+          if (depth > 2) return null
+          return (
+            <button
+              key={image.src + i}
+              type="button"
+              onClick={() => (depth === 0 ? setLightboxIndex(i) : goTo(i))}
+              className="absolute inset-0 overflow-hidden rounded-2xl border border-white/70 bg-white shadow-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-w-gold"
+              style={{
+                transform: `translate(${depth * 14}px, ${depth * 12}px) rotate(${depth * 2.5}deg)`,
+                zIndex: 10 - depth,
+              }}
+              aria-label={depth === 0 ? `Phóng to ảnh ${i + 1}` : `Đưa ảnh ${i + 1} lên trên`}
+            >
+              {frame(image, i, 'object-cover')}
+            </button>
+          )
+        })}
+      </div>
+      <div className="mt-4 flex items-center justify-between gap-3">
+        {playButton}
+        <div key={active} className="min-w-0 flex-1 text-center">
+          <p className="font-serif text-2xl text-w-strong line-clamp-1">{current.caption ?? 'Khoảnh khắc yêu thương'}</p>
+          <p className="text-xs tracking-[0.18em] text-w-muted">{pad(active + 1)} / {pad(total)}</p>
+        </div>
+        <button type="button" onClick={goNext} className="gallery-icon-btn" aria-label="Ảnh sau">
+          <ChevronRight className="w-4 h-4" aria-hidden />
+        </button>
+      </div>
+      {progressBars && <div className="mt-3">{progressBars}</div>}
+    </div>
+  )
+
+  const filmStage = (
+    <div>
+      <div ref={stripRef} className="flex gap-3 overflow-x-auto py-3" role="list">
+        {images.map((image, i) => (
+          <button
+            key={image.src + i}
+            type="button"
+            data-index={i}
+            role="listitem"
+            onClick={() => (i === active ? setLightboxIndex(i) : goTo(i))}
+            className={`relative h-52 w-36 shrink-0 overflow-hidden rounded-md bg-stone-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-w-gold ${
+              i === active ? 'ring-2 ring-w-gold scale-105' : 'opacity-75'
+            }`}
+            aria-label={i === active ? `Phóng to ảnh ${i + 1}` : `Xem ảnh ${i + 1}`}
+            aria-current={i === active}
+          >
+            <span className="pointer-events-none absolute inset-x-0 top-0 z-[1] h-3 bg-[radial-gradient(circle,transparent_35%,#1c1917_36%)] bg-[length:12px_12px]" aria-hidden />
+            <span className="pointer-events-none absolute inset-x-0 bottom-0 z-[1] h-3 bg-[radial-gradient(circle,transparent_35%,#1c1917_36%)] bg-[length:12px_12px]" aria-hidden />
+            {frame(image, i, 'object-cover')}
+          </button>
+        ))}
+      </div>
+      <div className="mt-3 flex items-center gap-3">
+        {playButton}
+        <div key={active} className="min-w-0 flex-1 text-center">
+          <p className="font-serif text-2xl text-w-strong line-clamp-1">{current.caption ?? 'Khoảnh khắc yêu thương'}</p>
+        </div>
+        {zoomButton}
+      </div>
+      {progressBars && <div className="mt-3">{progressBars}</div>}
+    </div>
+  )
+
+  const stage = mosaic ? gridStage : stack ? stackStage : film ? filmStage : ring ? ringStage : slideStage
+
   return (
     <>
       <section id="khoanh-khac" className="py-16 sm:py-20 md:py-28 scroll-mt-16">
@@ -322,14 +443,24 @@ export function GallerySection({ images }: { images: GalleryImage[] }) {
           <div className="section-frame">
             <SectionHeading
               icon={<Images className="w-7 h-7" aria-hidden />}
-              description="Những khoảnh khắc đẹp nhất trên hành trình của chúng mình"
+              description={
+                mosaic
+                  ? 'Bấm một tấm ảnh để xem lớn.'
+                  : stack
+                    ? 'Ảnh in xếp chồng. Bấm tấm bên dưới để lật lên.'
+                    : film
+                      ? 'Kéo dải phim, bấm khung đang sáng để xem lớn.'
+                      : ring
+                        ? 'Xoay vòng ảnh, bấm tấm đang ở giữa để xem lớn.'
+                        : 'Những khoảnh khắc đẹp nhất trên hành trình của chúng mình'
+              }
             >
               Album ảnh cưới
             </SectionHeading>
 
-            <Reveal variant={ring ? 'zoom' : 'mask'}>{ring ? ringStage : slideStage}</Reveal>
+            <Reveal variant={ring ? 'zoom' : 'mask'}>{stage}</Reveal>
 
-            {total > 1 && (
+            {total > 1 && !mosaic && !stack && !film && (
               <Reveal delay={150}>
                 <div
                   ref={stripRef}
@@ -353,6 +484,7 @@ export function GallerySection({ images }: { images: GalleryImage[] }) {
                         className="object-cover"
                         style={image.focus ? { objectPosition: image.focus } : undefined}
                         sizes="112px"
+                        unoptimized={!isOptimizableImage(image.src)}
                       />
                     </button>
                   ))}

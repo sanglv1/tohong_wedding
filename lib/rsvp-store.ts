@@ -2,9 +2,11 @@ import { allowAttempt, hashValues, pipeline } from './redis'
 import { normalizePhone, RSVP_GUEST_OPTIONS, RSVP_LIMITS, VN_PHONE, type RsvpEntry } from './rsvp'
 
 const HASH_KEY = 'rsvp:entries'
+const hashKey = (scope?: string) => (scope ? `platform:rsvp:${scope}` : HASH_KEY)
 const RATE_LIMIT = { max: 5, windowSeconds: 600 }
 
-export const allowRsvp = (ip: string) => allowAttempt(`rsvp:rate:${ip}`, RATE_LIMIT)
+export const allowRsvp = (ip: string, scope?: string) =>
+  allowAttempt(scope ? `platform:rsvp-rate:${scope}:${ip}` : `rsvp:rate:${ip}`, RATE_LIMIT)
 
 const oneLine = (value: unknown, max: number) => String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max)
 
@@ -34,24 +36,25 @@ function parse(raw: string): RsvpEntry | null {
   }
 }
 
-export async function saveRsvp(input: Omit<RsvpEntry, 'createdAt' | 'updatedAt'>) {
-  const [existing] = await pipeline([['HGET', HASH_KEY, input.id]])
+export async function saveRsvp(input: Omit<RsvpEntry, 'createdAt' | 'updatedAt'>, scope?: string) {
+  const key = hashKey(scope)
+  const [existing] = await pipeline([['HGET', key, input.id]])
   const now = new Date().toISOString()
   const createdAt = (typeof existing === 'string' && parse(existing)?.createdAt) || now
   const entry: RsvpEntry = { ...input, createdAt, updatedAt: now }
-  await pipeline([['HSET', HASH_KEY, input.id, JSON.stringify(entry)]])
+  await pipeline([['HSET', key, input.id, JSON.stringify(entry)]])
   return entry
 }
 
-export async function listRsvps(): Promise<RsvpEntry[]> {
-  const [raw] = await pipeline([['HGETALL', HASH_KEY]])
+export async function listRsvps(scope?: string): Promise<RsvpEntry[]> {
+  const [raw] = await pipeline([['HGETALL', hashKey(scope)]])
   return hashValues(raw)
     .map(parse)
     .filter((e): e is RsvpEntry => e !== null)
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
 }
 
-export async function deleteRsvp(id: string) {
-  const [removed] = await pipeline([['HDEL', HASH_KEY, id]])
+export async function deleteRsvp(id: string, scope?: string) {
+  const [removed] = await pipeline([['HDEL', hashKey(scope), id]])
   return Number(removed) > 0
 }

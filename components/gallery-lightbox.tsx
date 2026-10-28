@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import { ChevronLeft, ChevronRight, Pause, Play, X, ZoomIn, ZoomOut } from 'lucide-react'
 import type { GalleryImage } from '@/lib/gallery'
+import { isOptimizableImage } from '@/lib/media-src'
 import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { SlideProgress } from './gallery-progress'
 
@@ -78,7 +79,7 @@ export function GalleryLightbox({ images, index, onIndexChange, onClose }: Galle
 
         {current && (
           <div key={current.src} className="gallery-lightbox-ambient" aria-hidden>
-            <Image src={current.src} alt="" fill sizes="10vw" className="object-cover" />
+            <Image src={current.src} alt="" fill sizes="10vw" className="object-cover" unoptimized={!isOptimizableImage(current.src)} />
           </div>
         )}
 
@@ -160,7 +161,7 @@ export function GalleryLightbox({ images, index, onIndexChange, onClose }: Galle
         )}
 
         {neighbours.map((image) => (
-          <Image key={image.src} src={image.src} alt="" width={8} height={8} sizes="100vw" loading="eager" className="hidden" />
+          <Image key={image.src} src={image.src} alt="" width={8} height={8} sizes="100vw" loading="eager" className="hidden" unoptimized={!isOptimizableImage(image.src)} />
         ))}
 
         {total > 1 && (
@@ -189,6 +190,7 @@ export function GalleryLightbox({ images, index, onIndexChange, onClose }: Galle
                   className="object-cover"
                   style={image.focus ? { objectPosition: image.focus } : undefined}
                   sizes="64px"
+                  unoptimized={!isOptimizableImage(image.src)}
                 />
               </button>
             ))}
@@ -353,7 +355,7 @@ function ZoomableSlide({ image, zoomed, onZoomedChange, onSwipe, onClose }: Zoom
           transition: gesturing ? 'none' : 'transform 0.3s cubic-bezier(0.2, 0.7, 0.2, 1)',
         }}
       >
-        <Image src={image.src} alt={image.alt} fill draggable={false} className="object-contain" sizes="100vw" />
+        <Image src={image.src} alt={image.alt} fill draggable={false} className="object-contain" sizes="100vw" unoptimized={!isOptimizableImage(image.src)} />
       </div>
     </div>
   )

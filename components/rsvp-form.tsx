@@ -57,7 +57,7 @@ function RadioOption({
   )
 }
 
-export function RSVPForm() {
+export function RSVPForm({ endpoint = '/api/rsvp', demo = false }: { endpoint?: string; demo?: boolean }) {
   const [formData, setFormData] = useState(INITIAL_FORM)
   const [gotcha, setGotcha] = useState('')
   const [phoneError, setPhoneError] = useState<string | null>(null)
@@ -85,6 +85,11 @@ export function RSVPForm() {
     }
 
     setStatus('submitting')
+    if (demo) {
+      setStatus('error')
+      setError('Đây là mẫu xem thử. Xuất bản thiệp của bạn thì khách gửi được xác nhận.')
+      return
+    }
     const attending = formData.attendance === 'yes'
     try {
       try {
@@ -97,10 +102,10 @@ export function RSVPForm() {
           note: formData.note.trim(),
           invite: guestName ?? undefined,
           _gotcha: gotcha,
-        })
+        }, endpoint)
       } catch (err) {
         const notConfigured = (err as { status?: number }).status === 503
-        if (!notConfigured) throw err
+        if (endpoint !== '/api/rsvp' || !notConfigured) throw err
         if (!FORMSPREE_ID) {
           throw new Error('Hệ thống xác nhận đang được cập nhật. Vui lòng báo trực tiếp cho cô dâu chú rể.')
         }
@@ -178,7 +183,7 @@ export function RSVPForm() {
                     inputMode="tel"
                     value={formData.phone}
                     onChange={handleChange}
-                    placeholder="0972282892"
+                    placeholder="0900 000 000"
                     required
                     autoComplete="tel"
                     aria-invalid={phoneError ? true : undefined}

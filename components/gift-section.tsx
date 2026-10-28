@@ -1,26 +1,83 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import Image from 'next/image'
 import { Check, Copy, Gift, Hand, RotateCcw } from 'lucide-react'
-import { GIFT_QR } from '@/lib/gift'
-import { WEDDING } from '@/lib/constants'
+import { CLASSIC_MODEL } from '@/lib/constants'
+import type { GiftId } from '@/lib/platform/experience'
+import type { WeddingModel } from '@/lib/wedding-model'
+import { isOptimizableImage } from '@/lib/media-src'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Reveal } from './reveal'
 import { SectionHeading } from './section-heading'
 
-type GiftAccount = (typeof GIFT_QR)[keyof typeof GIFT_QR]
+type GiftAccount = WeddingModel['gift']['groom']
 type EnvelopeStage = 'closed' | 'opening' | 'open'
+type SharedGiftId = 'hop' | 'thung' | 'tui' | 'tim'
 
-/** Thời gian nắp lật + thiệp trượt lên trước khi hiện thẻ QR (khớp với transition trong globals.css) */
+/** Thời gian nắp lật trước khi hiện thẻ tài khoản */
 const OPEN_DURATION = 1150
+
+const GIFT_COPY: Record<GiftId, { hint: string; lead: string; close: string; label: string }> = {
+  'phong-bi': {
+    hint: 'Chạm phong bì để mở',
+    lead: 'Mỗi người một phong bì. Mở ra để xem mã QR và số tài khoản.',
+    close: 'Gấp lại',
+    label: 'phong bì',
+  },
+  hop: {
+    hint: 'Chạm nắp hộp quà',
+    lead: 'Một hộp quà cho cả hai. Chạm nắp để xem tài khoản chú rể và cô dâu.',
+    close: 'Đậy hộp',
+    label: 'hộp quà',
+  },
+  thung: {
+    hint: 'Chạm khóa thùng',
+    lead: 'Thùng nhận quà. Chạm khóa, nắp mở, hiện tài khoản của hai bạn.',
+    close: 'Đóng thùng',
+    label: 'thùng quà',
+  },
+  tui: {
+    hint: 'Chạm dây túi lụa',
+    lead: 'Túi lụa thắt dây. Kéo dây để xem tài khoản chú rể và cô dâu.',
+    close: 'Thắt túi',
+    label: 'túi lụa',
+  },
+  tim: {
+    hint: 'Chạm hộp tim',
+    lead: 'Hộp tim mở ra là tài khoản chú rể và cô dâu.',
+    close: 'Khép lại',
+    label: 'hộp tim',
+  },
+  the: {
+    hint: 'Chạm để lật thẻ',
+    lead: 'Lật thẻ mừng để xem mã QR và số tài khoản.',
+    close: 'Úp thẻ',
+    label: 'thẻ',
+  },
+  keo: {
+    hint: 'Chạm nơ ruy băng',
+    lead: 'Kéo nơ để mở quà và xem thông tin chuyển khoản.',
+    close: 'Buộc lại',
+    label: 'gói quà',
+  },
+  mo: {
+    hint: '',
+    lead: 'Mã mừng hiện sẵn. Tiền đi thẳng vào tài khoản của hai bạn.',
+    close: '',
+    label: 'thẻ mừng',
+  },
+}
+
+function isSharedGift(style: GiftId): style is SharedGiftId {
+  return style === 'hop' || style === 'thung' || style === 'tui' || style === 'tim'
+}
 
 async function copyText(text: string) {
   try {
     await navigator.clipboard.writeText(text)
     return true
   } catch {
-    // Trình duyệt trong app Zalo/Messenger cũ không có Clipboard API
     const textarea = document.createElement('textarea')
     textarea.value = text
     textarea.setAttribute('readonly', '')
@@ -60,165 +117,458 @@ function CopyAccountButton({ accountNumber }: { accountNumber: string }) {
   )
 }
 
-function GiftEnvelope({
-  account,
-  fullName,
-  shortName,
-  delay,
-  onQRClick,
-}: {
-  account: GiftAccount
-  fullName: string
-  shortName: string
-  delay: number
-  onQRClick: () => void
-}) {
-  const [stage, setStage] = useState<EnvelopeStage>('closed')
-  const envelopeRef = useRef<HTMLButtonElement>(null)
-  const cardRef = useRef<HTMLDivElement>(null)
+function useUnwrap(initiallyOpen = false) {
+  const [stage, setStage] = useState<EnvelopeStage>(initiallyOpen ? 'open' : 'closed')
+  const anchorRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
-  const shouldFocusCard = useRef(false)
+  const focusOnOpen = useRef(false)
 
   useEffect(() => () => clearTimeout(timer.current), [])
 
   useEffect(() => {
-    if (stage === 'open' && shouldFocusCard.current) {
-      shouldFocusCard.current = false
-      cardRef.current?.focus({ preventScroll: true })
+    if (stage === 'open' && focusOnOpen.current) {
+      focusOnOpen.current = false
+      panelRef.current?.focus({ preventScroll: true })
     }
   }, [stage])
 
-  const handleOpen = () => {
+  const unwrap = () => {
     if (stage !== 'closed') return
-    shouldFocusCard.current = true
+    focusOnOpen.current = true
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       setStage('open')
       return
     }
     setStage('opening')
-    const rect = envelopeRef.current?.getBoundingClientRect()
+    const rect = anchorRef.current?.getBoundingClientRect()
     timer.current = setTimeout(() => {
       setStage('open')
-      if (rect) {
-        const x = (rect.left + rect.width / 2) / window.innerWidth
-        const y = (rect.top + rect.height * 0.3) / window.innerHeight
-        import('@/lib/confetti').then(({ fireGiftBurst }) => fireGiftBurst(x, y))
-      }
+      if (!rect) return
+      const x = (rect.left + rect.width / 2) / window.innerWidth
+      const y = (rect.top + rect.height * 0.35) / window.innerHeight
+      import('@/lib/confetti').then(({ fireGiftBurst }) => fireGiftBurst(x, y))
     }, OPEN_DURATION)
   }
 
+  return { stage, anchorRef, panelRef, unwrap, close: () => setStage('closed') }
+}
+
+function AccountCard({
+  account,
+  fullName,
+  onQRClick,
+}: {
+  account: GiftAccount
+  fullName: string
+  onQRClick: () => void
+}) {
   return (
-    <Reveal delay={delay} className="flex flex-col items-center">
+    <div className="gift-note gift-reveal w-full bg-w-qr rounded-2xl p-6 sm:p-8 border-2 border-w-gold text-center">
+      <p className="text-xs uppercase tracking-[0.2em] text-w-muted mb-3">{account.name}</p>
+      {account.qrPath && (
+        <button
+          type="button"
+          onClick={onQRClick}
+          className="relative block w-40 h-40 bg-white rounded-lg overflow-hidden mx-auto mb-4 p-2 hover:ring-2 hover:ring-w-gold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-w-gold cursor-zoom-in"
+          aria-label={`Phóng to mã QR của ${fullName}`}
+        >
+          <Image
+            src={account.qrPath}
+            alt={`Mã QR chuyển khoản của ${fullName}`}
+            fill
+            className="object-contain"
+            sizes="160px"
+            unoptimized={!isOptimizableImage(account.qrPath)}
+          />
+        </button>
+      )}
+      <h3 className="text-lg font-semibold text-w-strong mb-2">{fullName}</h3>
+      <div className="space-y-0.5 text-sm text-w-text">
+        {account.bankName && <p className="font-medium">{account.bankName}</p>}
+        {account.accountNumber && <p className="font-mono text-base tracking-wider">{account.accountNumber}</p>}
+        {account.accountName && <p className="text-xs uppercase text-w-muted">{account.accountName}</p>}
+      </div>
+      {account.accountNumber && <CopyAccountButton accountNumber={account.accountNumber} />}
+    </div>
+  )
+}
+
+function CloseRow({ label, onClose }: { label: string; onClose: () => void }) {
+  if (!label) return null
+  return (
+    <div className="mt-4 text-center">
+      <button
+        type="button"
+        onClick={onClose}
+        className="inline-flex items-center gap-1 text-xs text-w-muted hover:text-w-strong underline-offset-2 hover:underline"
+      >
+        <RotateCcw className="w-3 h-3" aria-hidden />
+        {label}
+      </button>
+    </div>
+  )
+}
+
+function Hint({ text, hidden }: { text: string; hidden: boolean }) {
+  if (!text) return null
+  return (
+    <p className={`mt-5 inline-flex items-center gap-1.5 text-sm text-w-muted transition-opacity ${hidden ? 'opacity-0' : ''}`}>
+      <Hand className="w-4 h-4 gift-hint-icon" aria-hidden />
+      {text}
+    </p>
+  )
+}
+
+function Bow() {
+  return (
+    <span className="gx-bow" aria-hidden>
+      <span className="gx-loop gx-loop-l" />
+      <span className="gx-loop gx-loop-r" />
+      <span className="gx-tail gx-tail-l" />
+      <span className="gx-tail gx-tail-r" />
+      <span className="gx-knot" />
+    </span>
+  )
+}
+
+function Coins() {
+  return (
+    <span className="gx-coins" aria-hidden>
+      <span />
+      <span />
+      <span />
+    </span>
+  )
+}
+
+function GiftTag({ title, who, tone, place = 'lower' }: { title: string; who: string; tone: 'light' | 'dark'; place?: 'lower' | 'mid' }) {
+  return (
+    <span className={`gx-tag gx-tag-${tone} ${place === 'mid' ? 'gx-tag-mid' : ''}`}>
+      <span className="gx-mark" aria-hidden>
+        囍
+      </span>
+      <span className="gx-script">{title}</span>
+      <span className="gx-who">{who}</span>
+    </span>
+  )
+}
+
+function PresentFace({ who }: { who: string }) {
+  return (
+    <span className="gx-present">
+      <span className="gx-present-shadow" aria-hidden />
+      <Coins />
+      <span className="gx-present-body" aria-hidden>
+        <span className="gx-ribbon gx-ribbon-v" />
+        <span className="gx-ribbon gx-ribbon-h" />
+        <GiftTag title="Hộp quà" who={who} tone="light" />
+      </span>
+      <span className="gx-lid">
+        <span className="gx-lid-face">
+          <span className="gx-sheen" />
+        </span>
+        <Bow />
+      </span>
+    </span>
+  )
+}
+
+function ChestFace({ who }: { who: string }) {
+  return (
+    <span className="gx-chest">
+      <span className="gx-present-shadow" aria-hidden />
+      <Coins />
+      <span className="gx-chest-glow" aria-hidden />
+      <span className="gx-chest-body">
+        <span className="gx-band gx-band-top" aria-hidden />
+        <span className="gx-band gx-band-bot" aria-hidden />
+        <GiftTag title="Thùng mừng" who={who} tone="dark" place="mid" />
+      </span>
+      <span className="gx-chest-lid">
+        <span className="gx-chest-lid-face">
+          <span className="gx-band gx-band-lid" aria-hidden />
+          <span className="gx-sheen" />
+        </span>
+        <span className="gx-clasp" aria-hidden />
+      </span>
+    </span>
+  )
+}
+
+function PouchFace({ who }: { who: string }) {
+  return (
+    <span className="gx-pouch block">
+      <span className="gx-cord gx-cord-l" aria-hidden />
+      <span className="gx-cord gx-cord-r" aria-hidden />
+      <span className="gx-pouch-knot" aria-hidden />
+      <span className="gx-pouch-body">
+        <span className="gx-pouch-mouth" aria-hidden />
+        <span className="gx-pouch-copy">
+          <span className="gx-mark" aria-hidden>
+            囍
+          </span>
+          <span className="gx-script">Túi lụa</span>
+          <span className="gx-who">{who}</span>
+        </span>
+      </span>
+    </span>
+  )
+}
+
+function HeartFace({ who }: { who: string }) {
+  const rawId = useId()
+  const fillId = `gx-heart-${rawId.replace(/:/g, '')}`
+  return (
+    <span className="gx-heart">
+      <svg className="gx-heart-svg" viewBox="0 0 24 24" aria-hidden>
+        <defs>
+          <linearGradient id={fillId} x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stopColor="#fecdd3" />
+            <stop offset="0.42" stopColor="#e11d48" />
+            <stop offset="1" stopColor="#9f1239" />
+          </linearGradient>
+        </defs>
+        <path
+          d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
+          fill={`url(#${fillId})`}
+          stroke="#f8e7b0"
+          strokeWidth="0.45"
+        />
+      </svg>
+      <span className="gx-heart-copy">
+        <span className="gx-mark" aria-hidden>
+          囍
+        </span>
+        <span className="gx-script">Hộp tim</span>
+        <span className="gx-who">{who}</span>
+      </span>
+    </span>
+  )
+}
+
+function CardFace({ who, role }: { who: string; role: string }) {
+  return (
+    <span className="gx-card-face">
+      <span className="gx-corner gx-corner-tl" aria-hidden />
+      <span className="gx-corner gx-corner-tr" aria-hidden />
+      <span className="gx-corner gx-corner-bl" aria-hidden />
+      <span className="gx-corner gx-corner-br" aria-hidden />
+      <span className="gx-sheen" aria-hidden />
+      <span className="gx-mark">囍</span>
+      <span className="gx-script">Mừng cưới</span>
+      <span className="gx-who">{who}</span>
+      <span className="gx-role">{role}</span>
+    </span>
+  )
+}
+
+function ParcelFace({ who }: { who: string }) {
+  return (
+    <span className="gx-parcel-box">
+      <span className="gx-paper">
+        <GiftTag title="Mừng cưới" who={who} tone="light" />
+      </span>
+      <span className="gx-ribbon gx-ribbon-v" aria-hidden />
+      <span className="gx-ribbon gx-ribbon-h" aria-hidden />
+      <Bow />
+    </span>
+  )
+}
+
+function sideHasDetail(account: GiftAccount) {
+  return Boolean(account.qrPath || account.accountNumber || account.bankName || account.accountName)
+}
+
+function CoupleGift({
+  style,
+  groom,
+  bride,
+  onZoom,
+}: {
+  style: SharedGiftId
+  groom: { account: GiftAccount; fullName: string; shortName: string }
+  bride: { account: GiftAccount; fullName: string; shortName: string }
+  onZoom: (account: GiftAccount, fullName: string) => void
+}) {
+  const { stage, anchorRef, panelRef, unwrap, close } = useUnwrap()
+  const copy = GIFT_COPY[style]
+  const who = `${groom.shortName} & ${bride.shortName}`
+  const sides = [groom, bride].filter((side) => sideHasDetail(side.account))
+  const openLabel = `Mở ${copy.label} để xem tài khoản của ${groom.fullName} và ${bride.fullName}`
+
+  return (
+    <Reveal delay={120} className="flex flex-col items-center">
       {stage !== 'open' ? (
-        <div className="w-full flex flex-col items-center pt-10 sm:pt-12">
+        <div className="flex w-full flex-col items-center pt-2">
           <button
-            ref={envelopeRef}
+            ref={anchorRef}
             type="button"
-            onClick={handleOpen}
+            onClick={unwrap}
             disabled={stage === 'opening'}
-            className={`gift-env ${stage === 'opening' ? 'is-open' : ''}`}
-            aria-label={`Mở phong bì mừng cưới ${account.name.toLowerCase()} ${fullName} để xem mã QR`}
+            className={`gx-hit gx-${style} ${stage === 'opening' ? 'is-open' : ''}`}
+            aria-label={openLabel}
           >
-            <span className="gift-env-back" aria-hidden />
-            <span className="gift-env-letter" aria-hidden>
-              <span className="gift-env-letter-mark">囍</span>
-              <span className="gift-env-letter-text">Mã QR mừng cưới</span>
-            </span>
-            <span className="gift-env-pocket" aria-hidden>
-              <span className="gift-env-title">Mừng cưới</span>
-              <span className="gift-env-name">
-                {account.name} · {shortName}
-              </span>
-            </span>
-            <span className="gift-env-flap" aria-hidden />
-            <span className="gift-env-seal" aria-hidden>
-              囍
-            </span>
+            {style === 'thung' ? (
+              <ChestFace who={who} />
+            ) : style === 'tui' ? (
+              <PouchFace who={who} />
+            ) : style === 'tim' ? (
+              <HeartFace who={who} />
+            ) : (
+              <PresentFace who={who} />
+            )}
           </button>
-          <p
-            className={`mt-5 inline-flex items-center gap-1.5 text-sm text-w-muted transition-opacity ${
-              stage === 'opening' ? 'opacity-0' : ''
-            }`}
-          >
-            <Hand className="w-4 h-4 gift-hint-icon" aria-hidden />
-            Chạm vào phong bì để mở
-          </p>
+          <Hint text={copy.hint} hidden={stage === 'opening'} />
         </div>
       ) : (
-        <div
-          ref={cardRef}
-          tabIndex={-1}
-          className="gift-reveal w-full bg-w-qr rounded-2xl p-6 sm:p-8 border-2 border-w-gold text-center focus:outline-none"
-        >
-          <p className="text-xs uppercase tracking-[0.2em] text-w-muted mb-3">{account.name}</p>
-          <button
-            type="button"
-            onClick={onQRClick}
-            className="relative block w-40 h-40 bg-white rounded-lg overflow-hidden mx-auto mb-4 p-2 hover:ring-2 hover:ring-w-gold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-w-gold cursor-zoom-in"
-            aria-label={`Phóng to mã QR của ${fullName}`}
-          >
-            <Image
-              src={account.qrPath}
-              alt={`Mã QR chuyển khoản của ${fullName}`}
-              fill
-              className="object-contain"
-              sizes="160px"
-            />
-          </button>
-          <h3 className="text-lg font-semibold text-w-strong mb-2">{fullName}</h3>
-          <div className="space-y-0.5 text-sm text-w-text">
-            {account.bankName && <p className="font-medium">{account.bankName}</p>}
-            {account.accountNumber && <p className="font-mono text-base tracking-wider">{account.accountNumber}</p>}
-            {account.accountName && <p className="text-xs uppercase text-w-muted">{account.accountName}</p>}
+        <div ref={panelRef} tabIndex={-1} className="w-full focus:outline-none">
+          <div className={`grid gap-6 ${sides.length > 1 ? 'md:grid-cols-2' : 'mx-auto max-w-md'}`}>
+            {sides.map((side) => (
+              <AccountCard
+                key={side.account.name}
+                account={side.account}
+                fullName={side.fullName}
+                onQRClick={() => onZoom(side.account, side.fullName)}
+              />
+            ))}
           </div>
-          {account.accountNumber && <CopyAccountButton accountNumber={account.accountNumber} />}
-          <div>
-            <button
-              type="button"
-              onClick={() => setStage('closed')}
-              className="mt-4 inline-flex items-center gap-1 text-xs text-w-muted hover:text-w-strong underline-offset-2 hover:underline"
-            >
-              <RotateCcw className="w-3 h-3" aria-hidden />
-              Gói lại phong bì
-            </button>
-          </div>
+          <CloseRow label={copy.close} onClose={close} />
         </div>
       )}
     </Reveal>
   )
 }
 
-export function GiftSection() {
+function PersonGift({
+  account,
+  fullName,
+  shortName,
+  delay,
+  style,
+  onQRClick,
+}: {
+  account: GiftAccount
+  fullName: string
+  shortName: string
+  delay: number
+  style: GiftId
+  onQRClick: () => void
+}) {
+  const { stage, anchorRef, panelRef, unwrap, close } = useUnwrap(style === 'mo')
+  const copy = GIFT_COPY[style]
+  const openLabel = `Mở ${copy.label} của ${account.name.toLowerCase()} ${fullName} để xem ${account.qrPath ? 'mã QR' : 'số tài khoản'}`
+
+  return (
+    <Reveal delay={delay} className="flex flex-col items-center">
+      {stage !== 'open' ? (
+        <div className="flex w-full flex-col items-center pt-6 sm:pt-8">
+          {style === 'the' ? (
+            <button
+              ref={anchorRef}
+              type="button"
+              onClick={unwrap}
+              disabled={stage === 'opening'}
+              className={`gx-hit gx-card ${stage === 'opening' ? 'is-open' : ''}`}
+              aria-label={openLabel}
+            >
+              <CardFace who={shortName} role={account.name} />
+            </button>
+          ) : style === 'keo' ? (
+            <button
+              ref={anchorRef}
+              type="button"
+              onClick={unwrap}
+              disabled={stage === 'opening'}
+              className={`gx-hit gx-parcel ${stage === 'opening' ? 'is-open' : ''}`}
+              aria-label={openLabel}
+            >
+              <ParcelFace who={shortName} />
+            </button>
+          ) : (
+            <button
+              ref={anchorRef}
+              type="button"
+              onClick={unwrap}
+              disabled={stage === 'opening'}
+              className={`gift-env ${stage === 'opening' ? 'is-open' : ''}`}
+              aria-label={openLabel}
+            >
+              <span className="gift-env-back" aria-hidden />
+              <span className="gift-env-letter" aria-hidden>
+                <span className="gift-env-letter-mark">囍</span>
+                <span className="gift-env-letter-text">{account.qrPath ? 'Mã QR mừng cưới' : 'Số tài khoản'}</span>
+              </span>
+              <span className="gift-env-pocket" aria-hidden>
+                <span className="gift-env-title">Mừng cưới</span>
+                <span className="gift-env-name">
+                  {account.name} · {shortName}
+                </span>
+              </span>
+              <span className="gift-env-flap" aria-hidden />
+              <span className="gift-env-seal" aria-hidden>
+                囍
+              </span>
+            </button>
+          )}
+          <Hint text={copy.hint} hidden={stage === 'opening'} />
+        </div>
+      ) : (
+        <div ref={panelRef} tabIndex={-1} className="w-full focus:outline-none">
+          <AccountCard account={account} fullName={fullName} onQRClick={onQRClick} />
+          {style !== 'mo' && <CloseRow label={copy.close} onClose={close} />}
+        </div>
+      )}
+    </Reveal>
+  )
+}
+
+export function GiftSection({ model = CLASSIC_MODEL, style = 'phong-bi' }: { model?: WeddingModel; style?: GiftId }) {
   const [zoomed, setZoomed] = useState<{ account: GiftAccount; fullName: string } | null>(null)
+  const WEDDING = model.wedding
+  const GIFT_QR = model.gift
+
+  if (!model.hasGift) return null
+
+  const groom = { account: GIFT_QR.groom, fullName: WEDDING.groom, shortName: WEDDING.groomShort }
+  const bride = { account: GIFT_QR.bride, fullName: WEDDING.bride, shortName: WEDDING.brideShort }
 
   return (
     <>
       <section id="hop-mung" className="py-16 sm:py-20 md:py-28 scroll-mt-16">
         <div className="max-w-4xl mx-auto px-4 sm:px-6">
           <div className="section-frame">
-            <SectionHeading
-              icon={<Gift className="w-7 h-7" aria-hidden />}
-              description="Nếu bạn muốn gửi lời chúc mừng qua chuyển khoản, hãy mở phong bì để xem mã QR và số tài khoản."
-            >
+            <SectionHeading icon={<Gift className="w-7 h-7" aria-hidden />} description={GIFT_COPY[style].lead}>
               Hộp mừng cưới
             </SectionHeading>
 
-            <div className="grid md:grid-cols-2 gap-10 sm:gap-8 items-start">
-              <GiftEnvelope
-                account={GIFT_QR.groom}
-                fullName={WEDDING.groom}
-                shortName={WEDDING.groomShort}
-                delay={100}
-                onQRClick={() => setZoomed({ account: GIFT_QR.groom, fullName: WEDDING.groom })}
+            {isSharedGift(style) ? (
+              <CoupleGift
+                style={style}
+                groom={groom}
+                bride={bride}
+                onZoom={(account, fullName) => setZoomed({ account, fullName })}
               />
-              <GiftEnvelope
-                account={GIFT_QR.bride}
-                fullName={WEDDING.bride}
-                shortName={WEDDING.brideShort}
-                delay={200}
-                onQRClick={() => setZoomed({ account: GIFT_QR.bride, fullName: WEDDING.bride })}
-              />
-            </div>
+            ) : (
+              <div className="grid md:grid-cols-2 gap-10 sm:gap-8 items-start">
+                <PersonGift
+                  account={groom.account}
+                  fullName={groom.fullName}
+                  shortName={groom.shortName}
+                  delay={100}
+                  style={style}
+                  onQRClick={() => setZoomed({ account: groom.account, fullName: groom.fullName })}
+                />
+                <PersonGift
+                  account={bride.account}
+                  fullName={bride.fullName}
+                  shortName={bride.shortName}
+                  delay={200}
+                  style={style}
+                  onQRClick={() => setZoomed({ account: bride.account, fullName: bride.fullName })}
+                />
+              </div>
+            )}
           </div>
         </div>
       </section>
@@ -237,6 +587,7 @@ export function GiftSection() {
                   fill
                   className="object-contain"
                   sizes="320px"
+                  unoptimized={!isOptimizableImage(zoomed.account.qrPath)}
                 />
               </div>
               <DialogDescription className="text-stone-600 text-sm mt-4">

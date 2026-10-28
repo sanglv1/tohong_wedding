@@ -4,11 +4,14 @@ import { allowAttempt, hashValues, pipeline } from './redis'
 
 const LIST_KEY = 'guests:list'
 const OPENS_KEY = 'guests:opens'
+const listKey = (scope?: string) => (scope ? `platform:guests:${scope}` : LIST_KEY)
+const opensKey = (scope?: string) => (scope ? `platform:guest-opens:${scope}` : OPENS_KEY)
 const MAX_NAME = 60
 const MAX_BATCH = 500
 const OPEN_LIMIT = { max: 30, windowSeconds: 600 }
 
-export const allowOpen = (ip: string) => allowAttempt(`guests:open-rate:${ip}`, OPEN_LIMIT)
+export const allowOpen = (ip: string, scope?: string) =>
+  allowAttempt(scope ? `platform:open-rate:${scope}:${ip}` : `guests:open-rate:${ip}`, OPEN_LIMIT)
 
 function parseJson<T>(raw: string): T | null {
   try {
@@ -18,10 +21,10 @@ function parseJson<T>(raw: string): T | null {
   }
 }
 
-export async function listGuests(): Promise<GuestRecord[]> {
+export async function listGuests(scope?: string): Promise<GuestRecord[]> {
   const [list, opens] = await pipeline([
-    ['HGETALL', LIST_KEY],
-    ['HGETALL', OPENS_KEY],
+    ['HGETALL', listKey(scope)],
+    ['HGETALL', opensKey(scope)],
   ])
   const openMap = new Map<string, GuestOpens>()
   if (Array.isArray(opens)) {
@@ -38,7 +41,7 @@ export async function listGuests(): Promise<GuestRecord[]> {
 }
 
 /** Thêm khách (tên đã có thì giữ nguyên); trả về số khách mới */
-export async function addGuests(names: unknown[]) {
+export async function addGuests(names: unknown[], scope?: string) {
   const now = Date.now()
   const commands = names
     .map((n) => String(n ?? '').replace(/\s+/g, ' ').trim().slice(0, MAX_NAME))
@@ -46,32 +49,32 @@ export async function addGuests(names: unknown[]) {
     .slice(0, MAX_BATCH)
     .map((name, i) => {
       const record: GuestRecord = { key: guestKey(name), name, createdAt: new Date(now + i).toISOString() }
-      return ['HSETNX', LIST_KEY, record.key, JSON.stringify(record)]
+      return ['HSETNX', listKey(scope), record.key, JSON.stringify(record)]
     })
   if (commands.length === 0) return 0
   const results = await pipeline(commands)
   return results.filter((r) => Number(r) === 1).length
 }
 
-export async function deleteGuest(key: string) {
+export async function deleteGuest(key: string, scope?: string) {
   const [removed] = await pipeline([
-    ['HDEL', LIST_KEY, key],
-    ['HDEL', OPENS_KEY, key],
+    ['HDEL', listKey(scope), key],
+    ['HDEL', opensKey(scope), key],
   ])
   return Number(removed) > 0
 }
 
 /** Ghi nhận khách mở thiệp - chỉ với tên có trong danh sách khách mời */
-export async function recordOpen(name: string) {
+export async function recordOpen(name: string, scope?: string) {
   const key = guestKey(name)
   const [exists, raw] = await pipeline([
-    ['HEXISTS', LIST_KEY, key],
-    ['HGET', OPENS_KEY, key],
+    ['HEXISTS', listKey(scope), key],
+    ['HGET', opensKey(scope), key],
   ])
   if (Number(exists) !== 1) return false
   const now = new Date().toISOString()
   const prev = typeof raw === 'string' ? parseJson<GuestOpens>(raw) : null
   const opens: GuestOpens = { first: prev?.first ?? now, last: now, count: (prev?.count ?? 0) + 1 }
-  await pipeline([['HSET', OPENS_KEY, key, JSON.stringify(opens)]])
+  await pipeline([['HSET', opensKey(scope), key, JSON.stringify(opens)]])
   return true
 }

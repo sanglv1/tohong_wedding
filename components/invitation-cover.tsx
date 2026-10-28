@@ -1,19 +1,49 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import { Heart, Palette } from 'lucide-react'
-import { WEDDING, ANNOUNCEMENT } from '@/lib/constants'
+import { CLASSIC_MODEL } from '@/lib/constants'
+import type { WeddingModel } from '@/lib/wedding-model'
 import { useGuestName } from '@/hooks/use-guest-name'
 import { useWeddingTheme } from '@/hooks/use-wedding-theme'
 import { WEDDING_OPEN_EVENT } from '@/hooks/use-background-music'
+import type { SignatureLayout } from '@/components/signature-heroes'
+import { SignatureCover } from '@/components/signature-cover'
+import type { OpeningId } from '@/lib/platform/experience'
+import { openingDress, PACE_SCALE, type OpeningDress } from '@/lib/platform/opening-dress'
 
 /** closed → opening (dấu sáp tách, nắp lật) → revealing (chớp sáng, hai cánh cửa mở) → hidden */
 type Stage = 'closed' | 'opening' | 'revealing' | 'hidden'
 
-const OPENING_MS = 1150
-const REVEALING_MS = 1500
+const TIMING: Record<Exclude<OpeningId, 'trang'>, { open: number; reveal: number; confetti: boolean }> = {
+  'phong-bi': { open: 1150, reveal: 1500, confetti: true },
+  'rem-cua': { open: 420, reveal: 1100, confetti: false },
+  'anh-sang': { open: 360, reveal: 1000, confetti: false },
+  'canh-hoa': { open: 900, reveal: 1300, confetti: true },
+}
 
 const loadConfetti = () => import('@/lib/confetti')
+
+type CoverLayout = SignatureLayout | 'veil'
+
+const VEIL_DEW = [
+  { left: '14%', top: '22%', delay: '0s' },
+  { left: '28%', top: '64%', delay: '1.1s' },
+  { left: '46%', top: '18%', delay: '0.4s' },
+  { left: '62%', top: '72%', delay: '1.6s' },
+  { left: '78%', top: '30%', delay: '0.8s' },
+  { left: '88%', top: '54%', delay: '1.9s' },
+]
+
+function dressStyle(dress: OpeningDress): CSSProperties {
+  return {
+    '--open-seal': dress.seal,
+    '--open-seal-deep': dress.sealDeep,
+    '--open-heart': dress.heart,
+    '--open-petal': dress.petal,
+    '--open-flash': dress.flash,
+  } as CSSProperties
+}
 
 function SealPiece({ part }: { part: 'whole' | 'left' | 'right' }) {
   return (
@@ -25,7 +55,22 @@ function SealPiece({ part }: { part: 'whole' | 'left' | 'right' }) {
   )
 }
 
-export function InvitationCover() {
+export function InvitationCover({
+  model = CLASSIC_MODEL,
+  allowThemeCycle = true,
+  effect = 'phong-bi',
+  templateId = 'trang-dat',
+  layout,
+}: {
+  model?: WeddingModel
+  allowThemeCycle?: boolean
+  effect?: Exclude<OpeningId, 'trang'>
+  templateId?: string
+  layout?: CoverLayout
+}) {
+  const WEDDING = model.wedding
+  const ANNOUNCEMENT = model.announcement
+  const dress = openingDress(templateId)
   const [stage, setStage] = useState<Stage>('closed')
   const guestName = useGuestName()
   const { themeName, cycleTheme } = useWeddingTheme()
@@ -50,21 +95,28 @@ export function InvitationCover() {
     window.dispatchEvent(new Event(WEDDING_OPEN_EVENT))
 
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const timing = layout === 'veil' ? { open: 1100, reveal: 1200, confetti: false } : TIMING[effect]
+    const scale = PACE_SCALE[dress.pace]
     setTimeout(() => {
       setStage('revealing')
       document.documentElement.dataset.opened = 'true'
-      loadConfetti().then((m) => m.fireOpeningCelebration())
+      if (timing.confetti) {
+        loadConfetti().then((m) => m.fireOpeningCelebration([dress.seal, dress.sealDeep, dress.petal, dress.flash, '#fffaf3']))
+      }
       setTimeout(() => {
         setStage('hidden')
         window.scrollTo({ top: 0 })
-      }, reduceMotion ? 0 : REVEALING_MS)
-    }, reduceMotion ? 0 : OPENING_MS)
+      }, reduceMotion ? 0 : timing.reveal * scale)
+    }, reduceMotion ? 0 : timing.open * scale)
   }
 
   if (stage === 'hidden') return null
 
   const isOpening = stage !== 'closed'
+  const signature = layout && layout !== 'veil' ? layout : undefined
   const dateFormatted = WEDDING.dateShort.replace(/\//g, '.')
+  const inviteLine = 'Trân trọng kính mời'
+  const announcementIsInvite = ANNOUNCEMENT.trim().toLocaleLowerCase('vi') === inviteLine.toLocaleLowerCase('vi')
 
   return (
     <div
@@ -72,25 +124,80 @@ export function InvitationCover() {
       aria-modal="true"
       aria-labelledby="cover-title"
       data-stage={stage}
-      className="cover-root fixed inset-0 z-[100]"
+      data-effect={effect}
+      data-layout={layout}
+      data-pace={dress.pace}
+      data-petal={dress.petalShape}
+      style={dressStyle(dress)}
+      className="cover-root fixed inset-x-0 bottom-0 top-[var(--demo-bar)] z-[100]"
     >
+      {effect === 'canh-hoa' && (
+        <div className="cover-bloom" aria-hidden>
+          {Array.from({ length: 12 }, (_, index) => (
+            <span key={index} style={{ left: `${6 + (index * 7.5) % 90}%`, animationDelay: `${(index % 6) * 0.08}s` }} />
+          ))}
+        </div>
+      )}
+      {layout === 'veil' && (
+        <div className="veil-gauze" aria-hidden>
+          <span className="veil-gauze-sheet" />
+          {VEIL_DEW.map((dew) => (
+            <span key={dew.left} className="veil-dew" style={{ left: dew.left, top: dew.top, animationDelay: dew.delay }} />
+          ))}
+        </div>
+      )}
+      {layout === 'constellation' && (
+        <div className="cover-stars" aria-hidden>
+          {Array.from({ length: 9 }, (_, index) => (
+            <span key={index} />
+          ))}
+        </div>
+      )}
+      {layout === 'marquee' && <div className="cover-lights" aria-hidden />}
+      {layout === 'tide' && (
+        <svg className="cover-wave" viewBox="0 0 1440 120" preserveAspectRatio="none" aria-hidden>
+          <path fill="currentColor" d="M0 60c180 40 300-40 480 0s300 40 480 0 300-40 480 0v60H0z" />
+        </svg>
+      )}
+      {layout === 'lantern' && (
+        <>
+          <span className="cover-lantern cover-lantern-left" aria-hidden />
+          <span className="cover-lantern cover-lantern-right" aria-hidden />
+        </>
+      )}
       <div className="cover-door cover-door-left" aria-hidden />
       <div className="cover-door cover-door-right" aria-hidden />
       <div className="cover-flash" aria-hidden />
 
-      <button
-        type="button"
-        onClick={cycleTheme}
-        className="cover-palette absolute top-4 right-4 sm:top-6 sm:right-6 z-10 w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-white/90 hover:bg-white shadow-lg border border-white/50 flex items-center justify-center text-stone-600 hover:text-stone-800 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
-        aria-label={`Đổi màu nền (hiện: ${themeName})`}
-        title={`Đổi màu (${themeName})`}
-      >
-        <Palette className="w-5 h-5 sm:w-6 sm:h-6" />
-      </button>
+      {allowThemeCycle && (
+        <button
+          type="button"
+          onClick={cycleTheme}
+          className="cover-palette absolute top-4 right-4 sm:top-6 sm:right-6 z-10 w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-white/90 hover:bg-white shadow-lg border border-white/50 flex items-center justify-center text-stone-600 hover:text-stone-800 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+          aria-label={`Đổi màu nền (hiện: ${themeName})`}
+          title={`Đổi màu (${themeName})`}
+        >
+          <Palette className="w-5 h-5 sm:w-6 sm:h-6" />
+        </button>
+      )}
 
       <div className="absolute inset-0 overflow-y-auto">
         <div className="min-h-full flex items-center justify-center p-4">
-          <div className="cover-card-wrap perspective-[1200px] w-full max-w-[420px]">
+          <div className={`cover-card-wrap perspective-[1200px] w-full ${layout === 'tide' || layout === 'broadsheet' ? 'max-w-xl' : 'max-w-[420px]'}`}>
+            {signature ? (
+              <SignatureCover
+                layout={signature}
+                announcement={ANNOUNCEMENT}
+                groom={WEDDING.groomShort}
+                bride={WEDDING.brideShort}
+                date={dateFormatted}
+                guestName={guestName ?? ''}
+                inviteLine={inviteLine}
+                showInviteLine={!announcementIsInvite}
+                opening={isOpening}
+                onOpen={handleOpen}
+              />
+            ) : (
             <div className="envelope-card relative w-full">
               <div className="cover-gold-frame absolute -inset-[1px] rounded-[2rem] opacity-90" />
               <div className="cover-inner-border absolute -inset-[2px] rounded-[1.5rem] m-[3px]" />
@@ -122,19 +229,21 @@ export function InvitationCover() {
                       <span className="cover-line-right w-8 h-px opacity-70" />
                     </div>
 
-                    <p className="cover-date font-serif text-xl sm:text-2xl tracking-[0.2em] mb-2">{dateFormatted}</p>
+                    <p className={`cover-date font-serif text-xl sm:text-2xl tracking-[0.2em] ${guestName || !announcementIsInvite ? 'mb-2' : 'mb-10'}`}>
+                      {dateFormatted}
+                    </p>
 
                     {guestName ? (
                       <div className="mb-8">
-                        <p className="cover-date text-xs uppercase tracking-[0.3em] font-light mb-2">
-                          Trân trọng kính mời
-                        </p>
+                        {!announcementIsInvite && (
+                          <p className="cover-date text-xs uppercase tracking-[0.3em] font-light mb-2">{inviteLine}</p>
+                        )}
                         <p className="cover-text font-serif text-2xl sm:text-3xl break-words">{guestName}</p>
                       </div>
                     ) : (
-                      <p className="cover-date text-xs uppercase tracking-[0.35em] mb-10 font-light">
-                        Trân trọng kính mời
-                      </p>
+                      !announcementIsInvite && (
+                        <p className="cover-date text-xs uppercase tracking-[0.35em] mb-10 font-light">{inviteLine}</p>
+                      )
                     )}
 
                     <button
@@ -162,6 +271,7 @@ export function InvitationCover() {
                 </div>
               </div>
             </div>
+            )}
           </div>
         </div>
       </div>

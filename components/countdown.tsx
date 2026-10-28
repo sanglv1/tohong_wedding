@@ -9,13 +9,11 @@ type CountdownState =
   | { status: 'today' }
   | { status: 'past' }
 
-const START = new Date(WEDDING.startISO).getTime()
-const END = new Date(WEDDING.endISO).getTime()
-
-function calculate(now: number): CountdownState {
-  if (now >= END) return { status: 'past' }
-  if (now >= START) return { status: 'today' }
-  const diff = START - now
+function calculate(now: number, start: number, end: number): CountdownState {
+  if (!start || !end) return { status: 'loading' }
+  if (now >= end) return { status: 'past' }
+  if (now >= start) return { status: 'today' }
+  const diff = start - now
   return {
     status: 'counting',
     days: Math.floor(diff / 86_400_000),
@@ -38,15 +36,17 @@ function CountdownItem({ value, label }: { value: number | null; label: string }
   )
 }
 
-export function Countdown() {
+export function Countdown({ startISO = WEDDING.startISO, endISO = WEDDING.endISO }: { startISO?: string; endISO?: string }) {
   const [state, setState] = useState<CountdownState>({ status: 'loading' })
 
   useEffect(() => {
-    const tick = () => setState(calculate(Date.now()))
+    const start = new Date(startISO).getTime()
+    const end = new Date(endISO).getTime()
+    const tick = () => setState(calculate(Date.now(), start, end))
     tick()
     const timer = setInterval(tick, 1000)
     return () => clearInterval(timer)
-  }, [])
+  }, [startISO, endISO])
 
   if (state.status === 'past') {
     return (

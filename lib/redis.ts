@@ -16,6 +16,26 @@ export const isRedisConfigured = Boolean(REDIS_URL && REDIS_TOKEN)
 
 type RedisResult = { result?: unknown; error?: string }
 
+/**
+ * EVAL không đi qua `pipeline`: pipeline luôn gắn tiền tố vào đối số thứ hai,
+ * trong khi đối số thứ hai của EVAL là mã script chứ không phải khóa.
+ * `keys` là khóa logic (chưa có REDIS_KEY_PREFIX).
+ */
+export async function redisEval(script: string, keys: string[], args: (string | number)[]): Promise<unknown> {
+  if (!REDIS_URL || !REDIS_TOKEN) throw new Error('Redis storage is not configured')
+  const command = ['EVAL', script, keys.length, ...keys.map((key) => `${KEY_PREFIX}${key}`), ...args]
+  const res = await fetch(REDIS_URL.replace(/\/$/, ''), {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${REDIS_TOKEN}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(command),
+    cache: 'no-store',
+  })
+  if (!res.ok) throw new Error(`Redis ${res.status}`)
+  const data = (await res.json()) as RedisResult
+  if (data.error) throw new Error(`Redis: ${data.error}`)
+  return data.result
+}
+
 export async function pipeline(commands: (string | number)[][]): Promise<unknown[]> {
   if (!REDIS_URL || !REDIS_TOKEN) throw new Error('Redis storage is not configured')
   const res = await fetch(`${REDIS_URL.replace(/\/$/, '')}/pipeline`, {

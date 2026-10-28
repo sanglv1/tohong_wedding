@@ -13,14 +13,14 @@ export interface GuestbookEntry {
   createdAt: string
 }
 
-export async function fetchGuestbook(): Promise<GuestbookEntry[]> {
-  const res = await fetch('/api/guestbook', { cache: 'no-store' })
+export async function fetchGuestbook(endpoint = '/api/guestbook'): Promise<GuestbookEntry[]> {
+  const res = await fetch(endpoint, { cache: 'no-store' })
   const data = await readJson<{ entries?: GuestbookEntry[] }>(res)
   return Array.isArray(data.entries) ? data.entries : []
 }
 
-export async function postGuestbook(entry: { name: string; message: string; website?: string }) {
-  const res = await fetch('/api/guestbook', {
+export async function postGuestbook(entry: { name: string; message: string; website?: string }, endpoint = '/api/guestbook') {
+  const res = await fetch(endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(entry),

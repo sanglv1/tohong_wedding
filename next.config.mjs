@@ -10,6 +10,8 @@ const nextConfig = {
     return [
       { source: '/quan-ly-loi-chuc', destination: '/quan-ly?tab=loi-chuc', permanent: false },
       { source: '/tao-link', destination: '/quan-ly?tab=khach-moi', permanent: false },
+      { source: '/tao-thiep', destination: '/', permanent: false },
+      { source: '/', has: [{ type: 'query', key: 'to' }], destination: '/thiep/tien-dat-huyen-trang', permanent: false },
     ]
   },
 }
